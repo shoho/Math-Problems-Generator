@@ -1,4 +1,4 @@
-const PROMPT_TEMPLATE = `
+const PROMPT_MATH_PROBLEMS_4TH_GRADE = `
 # 指示
 小学生向けの算数問題を下記の問題形式に従って5問作成してください。
 

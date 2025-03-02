@@ -163,7 +163,7 @@ function getQuestionsFromAPI(apiProvider) {
  * @returns {string} API に送信するプロンプト
  */
 function createPrompt() {
-  return PROMPT_TEMPLATE.replace(/##\{WORD_PROBLEM\}##/g, () =>
+  return PROMPT_MATH_PROBLEMS_4TH_GRADE.replace(/##\{WORD_PROBLEM\}##/g, () =>
     selectRandomItem(CONFIG.WORD_PROBLEM_TOPICS)
   );
 }
