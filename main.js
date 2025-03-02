@@ -11,9 +11,10 @@
  * テスト実行用のエントリーポイント - コンソール出力のみ
  */
 function test() {
-  const apiProvider = "claude"; // "gemini", "openai", "claude" から選択可能
+  const apiProvider = "gemini"; // "gemini", "openai", "claude" から選択可能
+  const grade = "4"; // "4", "5" から選択可能
   try {
-    const questions = getQuestionsFromAPI(apiProvider);
+    const questions = getQuestionsFromAPI(apiProvider, grade);
     const response = questions.map((q, i) => `第${i + 1}問\n ${q}`).join("\n\n");
     console.log(response);
   } catch (error) {
@@ -26,14 +27,14 @@ function test() {
  * テスト実行用のエントリーポイント - テスト用メール送信
  */
 function test_with_email() {
-  main({ isProd: false, apiProvider: "claude" });
+  main({ isProd: false, apiProvider: "gemini", grade: "4" });
 }
 
 /**
- * 本番実行用のエントリーポイント
+ * 4年生向け本番実行用のエントリーポイント
  */
 function execute() {
-  main({ isProd: true, apiProvider: "claude" });
+  main({ isProd: true, apiProvider: "claude", grade: "4" });
 }
 
 // ======== 設定 ========
@@ -81,12 +82,21 @@ const CONFIG = {
   },
   
   // 文章問題のテーマ一覧
-  WORD_PROBLEM_TOPICS: [
-    "小数", "分数", "図形", "四則計算", "複合問題", 
-    "単位換算", "時間と時刻", "概数", "データの整理", 
-    "角度", "図形の分類", "平均", "小数の倍", 
-    "計算の工夫", "グラフ", "未知数を求める", "変わり方調べ"
-  ]
+  WORD_PROBLEM_TOPICS: {
+    "4": [
+      "小数", "分数", "図形", "四則計算", "複合問題", 
+      "単位換算", "時間と時刻", "概数", "データの整理", 
+      "角度", "図形の分類", "平均", "小数の倍", 
+      "計算の工夫", "グラフ", "未知数を求める", "変わり方調べ"
+    ],
+    "5": [
+      "小数", "分数", "帯分数", "約分", "通分", "分数と小数の変換",
+      "平面図形", "立体図形", "体積", "表面積", "四則計算", "複合問題", 
+      "単位換算", "時間と時刻", "概数", "データの整理", "割合", "百分率",
+      "角度", "図形の分類", "平均", "小数の倍", "速さ", 
+      "計算の工夫", "グラフ", "未知数を求める", "変わり方調べ", "倍数と約数"
+    ]
+  }
 };
 
 // ======== メイン処理 ========
@@ -96,9 +106,10 @@ const CONFIG = {
  * @param {Object} options - 実行オプション
  * @param {boolean} options.isProd - 本番環境かどうか
  * @param {string} options.apiProvider - 使用するAPIのプロバイダ ("gemini", "openai", または "claude")
+ * @param {string} options.grade - 対象学年 ("4" または "5")
  * @returns {void}
  */
-function main({ isProd = true, apiProvider = "claude" }) {
+function main({ isProd = true, apiProvider = "claude", grade = "4" }) {
   const today = new Date();
   const env = isProd ? "PROD" : "DEV";
   
@@ -110,9 +121,7 @@ function main({ isProd = true, apiProvider = "claude" }) {
 
   try {
     // 問題の生成
-    const questions = getQuestionsFromAPI(apiProvider);
-
-
+    const questions = getQuestionsFromAPI(apiProvider, grade);
     
     // メール内容の作成
     const emailContent = createEmailContent(questions);
@@ -139,10 +148,11 @@ function main({ isProd = true, apiProvider = "claude" }) {
 /**
  * API を呼び出して質問を取得する
  * @param {string} apiProvider - 使用するAPIのプロバイダ ("gemini", "openai", または "claude")
+ * @param {string} grade - 対象学年 ("4" または "5")
  * @returns {string[]} 質問の配列
  * @throws {Error} API 呼び出しまたはデータ処理に失敗した場合
  */
-function getQuestionsFromAPI(apiProvider) {
+function getQuestionsFromAPI(apiProvider, grade) {
   // APIプロバイダに応じた関数を呼び出す
   const apiCallers = {
     'openai': callOpenAIApi,
@@ -151,7 +161,7 @@ function getQuestionsFromAPI(apiProvider) {
   };
   
   const apiCaller = apiCallers[apiProvider] || callGeminiApi;
-  const responseText = apiCaller();
+  const responseText = apiCaller(grade);
   
   // レスポンスの解析
   const jsonObject = parseJsonResponse(responseText);
@@ -160,27 +170,32 @@ function getQuestionsFromAPI(apiProvider) {
 
 /**
  * プロンプトテンプレート内のプレースホルダーを置換して、プロンプトを作成
+ * @param {string} grade - 対象学年 ("4" または "5")
  * @returns {string} API に送信するプロンプト
  */
-function createPrompt() {
-  return PROMPT_MATH_PROBLEMS_4TH_GRADE.replace(/##\{WORD_PROBLEM\}##/g, () =>
-    selectRandomItem(CONFIG.WORD_PROBLEM_TOPICS)
+function createPrompt(grade) {
+  // 学年に基づいて適切なプロンプトを選択
+  const promptTemplate = grade === "5" ? PROMPT_MATH_PROBLEMS_5TH_GRADE : PROMPT_MATH_PROBLEMS_4TH_GRADE;
+  
+  return promptTemplate.replace(/##\{WORD_PROBLEM\}##/g, () =>
+    selectRandomItem(CONFIG.WORD_PROBLEM_TOPICS[grade])
   );
 }
 
 /**
  * Gemini API を呼び出す
+ * @param {string} grade - 対象学年 ("4" または "5")
  * @returns {string} API レスポンス
  * @throws {Error} API 呼び出しに失敗した場合
  */
-function callGeminiApi() {
+function callGeminiApi(grade) {
   const apiKey = getApiKey('GEMINI_API_KEY');
   const url = `${CONFIG.API.GEMINI.ENDPOINT}${CONFIG.API.GEMINI.MODEL_NAME}:generateContent?key=${apiKey}`;
   
   const payload = {
     contents: [{
       role: "user",
-      parts: [{ text: createPrompt() }]
+      parts: [{ text: createPrompt(grade) }]
     }],
     generationConfig: CONFIG.GENERATION
   };
@@ -194,10 +209,11 @@ function callGeminiApi() {
 
 /**
  * OpenAI API を呼び出す
+ * @param {string} grade - 対象学年 ("4" または "5")
  * @returns {string} API レスポンス
  * @throws {Error} API 呼び出しに失敗した場合
  */
-function callOpenAIApi() {
+function callOpenAIApi(grade) {
   const apiKey = getApiKey('OPENAI_API_KEY');
   const url = CONFIG.API.OPENAI.ENDPOINT;
   
@@ -207,7 +223,7 @@ function callOpenAIApi() {
       role: "user",
       content: [{
         type: "text",
-        text: createPrompt()
+        text: createPrompt(grade)
       }]
     }],
     response_format: {
@@ -249,10 +265,11 @@ function callOpenAIApi() {
 
 /**
  * Claude API を呼び出す
+ * @param {string} grade - 対象学年 ("4" または "5")
  * @returns {string} API レスポンス
  * @throws {Error} API 呼び出しに失敗した場合
  */
-function callClaudeApi() {
+function callClaudeApi(grade) {
   const apiKey = getApiKey('CLAUDE_API_KEY');
   const url = CONFIG.API.CLAUDE.ENDPOINT;
   
@@ -262,7 +279,7 @@ function callClaudeApi() {
     temperature: 1,
     messages: [{
       role: "user",
-      content: createPrompt() + `
+      content: createPrompt(grade) + `
 
 最終的な回答はJSON形式で以下の構造で返してください:
 {
@@ -312,10 +329,10 @@ function getApiKey(keyName) {
 function callApi(apiName, url, options) {
   try {
     console.log(`Calling ${apiName} API...`);
-	const safeOptions = {...options, muteHttpExceptions: false};
+    const safeOptions = {...options, muteHttpExceptions: false};
     const response = UrlFetchApp.fetch(url, options);
 
-	const statusCode = response.getResponseCode();
+    const statusCode = response.getResponseCode();
     if (statusCode >= 400) {
       throw new Error(`${apiName} API returned status code ${statusCode}`);
     }
