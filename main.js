@@ -100,6 +100,7 @@ const CONFIG = {
  */
 function main({ isProd = true, apiProvider = "claude" }) {
   const today = new Date();
+  const env = isProd ? "PROD" : "DEV";
   
   // 休日チェック（本番環境のみ）
   if (isProd && isWeekend(today)) {
@@ -311,7 +312,14 @@ function getApiKey(keyName) {
 function callApi(apiName, url, options) {
   try {
     console.log(`Calling ${apiName} API...`);
+	const safeOptions = {...options, muteHttpExceptions: false};
     const response = UrlFetchApp.fetch(url, options);
+
+	const statusCode = response.getResponseCode();
+    if (statusCode >= 400) {
+      throw new Error(`${apiName} API returned status code ${statusCode}`);
+    }
+
     return response.getContentText();
   } catch (error) {
     throw new Error(`${apiName} API call failed: ${error.message}`);
