@@ -175,7 +175,7 @@ function getQuestionsFromAPI(apiProvider, grade) {
  */
 function createPrompt(grade) {
   // 学年に基づいて適切なプロンプトを選択
-  const promptTemplate = grade === "5" ? PROMPT_MATH_PROBLEMS_5TH_GRADE : PROMPT_MATH_PROBLEMS_4TH_GRADE;
+  const promptTemplate = grade === "5" ? PROMPT_MATH_PROBLEMS_5TH_GRADE : TEMP_PROMPT_MATH_PROBLEMS_4TH_GRADE;
   
   return promptTemplate.replace(/##\{WORD_PROBLEM\}##/g, () =>
     selectRandomItem(CONFIG.WORD_PROBLEM_TOPICS[grade])
