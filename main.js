@@ -14,9 +14,17 @@ function test() {
   const apiProvider = "gemini"; // "gemini", "openai", "claude" から選択可能
   const grade = "4"; // "4", "5" から選択可能
   try {
+    // 問題の生成
     const questions = getQuestionsFromAPI(apiProvider, grade);
-    const response = questions.map((q, i) => `第${i + 1}問\n ${q}`).join("\n\n");
-    console.log(response);
+    const questionsText = questions.map((q, i) => `第${i + 1}問\n ${q}`).join("\n\n");
+    console.log("=== 問題 ===");
+    console.log(questionsText);
+    
+    // 解説の生成
+    const explanation = getExplanationFromAPI(apiProvider, questions);
+    const explanationText = explanation.map((exp, i) => `第${i + 1}問\n ${exp}`).join("\n\n");
+    console.log("\n=== 解説 ===");
+    console.log(explanationText);
   } catch (error) {
     Logger.log(`Error in test execution: ${error.message}`);
     throw error;
@@ -123,20 +131,36 @@ function main({ isProd = true, apiProvider = "claude", grade = "4" }) {
     // 問題の生成
     const questions = getQuestionsFromAPI(apiProvider, grade);
     
-    // メール内容の作成
-    const emailContent = createEmailContent(questions);
-    const emailRecipients = getEmailRecipients(env);
-    const emailSubject = isProd ? createEmailSubject() : "[TEST]" + createEmailSubject();
+    // 問題の解説を生成
+    const explanation = getExplanationFromAPI(apiProvider, questions);
+    
+    // 問題のメール内容を作成
+    const questionEmailContent = createQuestionEmailContent(questions);
+    const questionRecipients = getQuestionRecipients(env);
+    const questionSubject = isProd ? createQuestionEmailSubject() : "[TEST]" + createQuestionEmailSubject();
 
-    // メール送信
+    // 回答のメール内容を作成
+    const answerEmailContent = createAnswerEmailContent(questions, explanation);
+    const answerRecipients = getAnswerRecipients(env);
+    const answerSubject = isProd ? createAnswerEmailSubject() : "[TEST]" + createAnswerEmailSubject();
+
+    // 問題のメール送信
     sendEmailWithContent({
-      recipient: emailRecipients.join(","),
-      subject: emailSubject,
-      content: emailContent
+      recipient: questionRecipients.join(","),
+      subject: questionSubject,
+      content: questionEmailContent
     });
 
-    Logger.log("Email sent successfully!");
-    logEmailContent(emailContent);
+    // 回答のメール送信
+    sendEmailWithContent({
+      recipient: answerRecipients.join(","),
+      subject: answerSubject,
+      content: answerEmailContent
+    });
+
+    Logger.log("Emails sent successfully!");
+    logEmailContent(questionEmailContent);
+    logEmailContent(answerEmailContent);
   } catch (error) {
     Logger.log(`Error in main execution: ${error.message}`);
     throw error;
@@ -153,6 +177,9 @@ function main({ isProd = true, apiProvider = "claude", grade = "4" }) {
  * @throws {Error} API 呼び出しまたはデータ処理に失敗した場合
  */
 function getQuestionsFromAPI(apiProvider, grade) {
+  // プロンプトの生成
+  const prompt = createPrompt(grade);
+  
   // APIプロバイダに応じた関数を呼び出す
   const apiCallers = {
     'openai': callOpenAIApi,
@@ -161,7 +188,7 @@ function getQuestionsFromAPI(apiProvider, grade) {
   };
   
   const apiCaller = apiCallers[apiProvider] || callGeminiApi;
-  const responseText = apiCaller(grade);
+  const responseText = apiCaller(prompt);
   
   // レスポンスの解析
   const jsonObject = parseJsonResponse(responseText);
@@ -169,33 +196,44 @@ function getQuestionsFromAPI(apiProvider, grade) {
 }
 
 /**
- * プロンプトテンプレート内のプレースホルダーを置換して、プロンプトを作成
- * @param {string} grade - 対象学年 ("4" または "5")
- * @returns {string} API に送信するプロンプト
+ * API を呼び出して問題の解説を取得する
+ * @param {string} apiProvider - 使用するAPIのプロバイダ ("gemini", "openai", または "claude")
+ * @param {string[]} questions - 問題の配列
+ * @returns {string[]} 問題の解説の配列
  */
-function createPrompt(grade) {
-  // 学年に基づいて適切なプロンプトを選択
-  const promptTemplate = grade === "5" ? PROMPT_MATH_PROBLEMS_5TH_GRADE : TEMP_PROMPT_MATH_PROBLEMS_4TH_GRADE;
+function getExplanationFromAPI(apiProvider, questions) {
+  // プロンプトの生成
+  const prompt = getExplanationPrompt() + "\n" + questions.join("\n\n");
   
-  return promptTemplate.replace(/##\{WORD_PROBLEM\}##/g, () =>
-    selectRandomItem(CONFIG.WORD_PROBLEM_TOPICS[grade])
-  );
+  // APIプロバイダに応じた関数を呼び出す
+  const apiCallers = {
+    'openai': callOpenAIApi,
+    'claude': callClaudeApi,
+    'gemini': callGeminiApi
+  };
+  
+  const apiCaller = apiCallers[apiProvider] || callGeminiApi;
+  const responseText = apiCaller(prompt);
+  
+  // レスポンスの解析
+  const jsonObject = parseJsonResponse(responseText);
+  return extractExplanationFromResponse(jsonObject, apiProvider);
 }
 
 /**
  * Gemini API を呼び出す
- * @param {string} grade - 対象学年 ("4" または "5")
+ * @param {string} prompt - APIに送信するプロンプト
  * @returns {string} API レスポンス
  * @throws {Error} API 呼び出しに失敗した場合
  */
-function callGeminiApi(grade) {
+function callGeminiApi(prompt) {
   const apiKey = getApiKey('GEMINI_API_KEY');
   const url = `${CONFIG.API.GEMINI.ENDPOINT}${CONFIG.API.GEMINI.MODEL_NAME}:generateContent?key=${apiKey}`;
   
   const payload = {
     contents: [{
       role: "user",
-      parts: [{ text: createPrompt(grade) }]
+      parts: [{ text: prompt }]
     }],
     generationConfig: CONFIG.GENERATION
   };
@@ -209,11 +247,11 @@ function callGeminiApi(grade) {
 
 /**
  * OpenAI API を呼び出す
- * @param {string} grade - 対象学年 ("4" または "5")
+ * @param {string} prompt - APIに送信するプロンプト
  * @returns {string} API レスポンス
  * @throws {Error} API 呼び出しに失敗した場合
  */
-function callOpenAIApi(grade) {
+function callOpenAIApi(prompt) {
   const apiKey = getApiKey('OPENAI_API_KEY');
   const url = CONFIG.API.OPENAI.ENDPOINT;
   
@@ -223,7 +261,7 @@ function callOpenAIApi(grade) {
       role: "user",
       content: [{
         type: "text",
-        text: createPrompt(grade)
+        text: prompt
       }]
     }],
     response_format: {
@@ -265,11 +303,11 @@ function callOpenAIApi(grade) {
 
 /**
  * Claude API を呼び出す
- * @param {string} grade - 対象学年 ("4" または "5")
+ * @param {string} prompt - APIに送信するプロンプト
  * @returns {string} API レスポンス
  * @throws {Error} API 呼び出しに失敗した場合
  */
-function callClaudeApi(grade) {
+function callClaudeApi(prompt) {
   const apiKey = getApiKey('CLAUDE_API_KEY');
   const url = CONFIG.API.CLAUDE.ENDPOINT;
   
@@ -299,8 +337,7 @@ function callClaudeApi(grade) {
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01"
     },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
+    payload: JSON.stringify(payload)
   });
 }
 
@@ -451,46 +488,126 @@ function extractClaudeQuestions(jsonObject) {
   throw new Error("Could not extract JSON from Claude response");
 }
 
-// ======== メール処理 ========
-
 /**
- * メールの内容を作成する
- * @param {string[]} questions - 質問の配列
- * @returns {{textBody: string, htmlBody: string}} メールの本文
+ * レスポンスから解説を抽出する
+ * @param {Object} jsonObject - パースされたJSONオブジェクト
+ * @param {string} apiProvider - 使用したAPIのプロバイダ
+ * @returns {string[]} 解説の配列
  */
-function createEmailContent(questions) {
-  // 注意書き
-  const notes = {
-    text: [
-      "ここに注意しよう",
-      "* ノートに問題をうつして、きれいに、ていねいな字でちゃんと書こう！",
-      "* いい姿勢でやろう",
-      "* 時間をはかろう"
-    ].join("\n"),
-    html: [
-      "<strong>ここに注意しよう</strong>",
-      "<ul>",
-      "<li>ノートに問題をうつして、<b>きれいに、ていねいな字で</b>ちゃんと書こう！</li>",
-      "<li>いい姿勢でやろう</li>",
-      "<li>時間をはかろう</li>",
-      "</ul>"
-    ].join("")
-  };
-
-  // プレーンテキストとHTML形式のメール本文を作成
-  const textBody = questions.map((q, i) => `第${i + 1}問\n ${q}`).join("\n\n") + "\n\n" + notes.text;
-  const htmlBody = questions.map((q, i) => `<b>第${i + 1}問</b><br> ${convertAllSlashesToHtmlFractions(q)}<br><br>`).join("") + "<br>" + notes.html;
-
-  return { textBody, htmlBody };
+function extractExplanationFromResponse(jsonObject, apiProvider) {
+  try {
+    // APIプロバイダに応じた抽出処理
+    const extractors = {
+      'gemini': extractGeminiExplanation,
+      'openai': extractOpenAIExplanation,
+      'claude': extractClaudeExplanation
+    };
+    
+    const extractor = extractors[apiProvider];
+    if (!extractor) {
+      throw new Error(`Unsupported API provider: ${apiProvider}`);
+    }
+    
+    return extractor(jsonObject);
+  } catch (error) {
+    throw new Error(`Explanation extraction failed: ${error.message}`);
+  }
 }
 
 /**
- * メールの件名を作成する
- * @returns {string} メールの件名
+ * Gemini APIレスポンスから解説を抽出
+ * @param {Object} jsonObject - パースされたJSONオブジェクト
+ * @returns {string[]} 解説の配列
  */
-function createEmailSubject() {
-  const date = Utilities.formatDate(new Date(), Session.getTimeZone(), "yyyy/MM/dd");
-  return `✏️${date} ${CONFIG.EMAIL.SUBJECT_PREFIX}`;
+function extractGeminiExplanation(jsonObject) {
+  if (!jsonObject.candidates || !jsonObject.candidates[0].content || !jsonObject.candidates[0].content.parts) {
+    throw new Error("Invalid Gemini API response format");
+  }
+  
+  const explanationText = jsonObject.candidates[0].content.parts[0].text;
+  const explanationObj = JSON.parse(explanationText);
+  return Object.values(explanationObj);
+}
+
+/**
+ * OpenAI APIレスポンスから解説を抽出
+ * @param {Object} jsonObject - パースされたJSONオブジェクト
+ * @returns {string[]} 解説の配列
+ */
+function extractOpenAIExplanation(jsonObject) {
+  if (!jsonObject.choices || !jsonObject.choices[0].message || !jsonObject.choices[0].message.content) {
+    throw new Error("Invalid OpenAI API response format");
+  }
+  
+  const explanationText = jsonObject.choices[0].message.content;
+  const explanationObj = JSON.parse(explanationText);
+  return Object.values(explanationObj);
+}
+
+/**
+ * Claude APIレスポンスから解説を抽出
+ * @param {Object} jsonObject - パースされたJSONオブジェクト
+ * @returns {string[]} 解説の配列
+ */
+function extractClaudeExplanation(jsonObject) {
+  if (!jsonObject.content || jsonObject.content.length === 0) {
+    throw new Error("Invalid Claude API response format");
+  }
+  
+  const explanationText = jsonObject.content[0].text;
+  const explanationObj = JSON.parse(explanationText);
+  return Object.values(explanationObj);
+}
+
+// ======== メール処理 ========
+
+/**
+ * 問題のメール内容を作成する
+ * @param {string[]} questions - 問題の配列
+ * @returns {Object} メール内容
+ */
+function createQuestionEmailContent(questions) {
+  const textBody = questions.map((q, i) => `第${i + 1}問\n${q}`).join("\n\n");
+  const htmlBody = questions.map((q, i) => `<h3>第${i + 1}問</h3><p>${q}</p>`).join("\n");
+  
+  return {
+    textBody: textBody,
+    htmlBody: htmlBody
+  };
+}
+
+/**
+ * 回答のメール内容を作成する
+ * @param {string[]} questions - 問題の配列
+ * @param {string[]} explanation - 問題の解説の配列
+ * @returns {Object} メール内容
+ */
+function createAnswerEmailContent(questions, explanation) {
+  const textBody = questions.map((q, i) => `第${i + 1}問\n${q}`).join("\n\n") + "\n\n" + explanation.map((q, i) => `第${i + 1}問\n${q}`).join("\n\n")
+  const htmlBody = questions.map((q, i) => `<h3>第${i + 1}問</h3><p>${q}</p>`).join("\n") + "<br/><hr /><br />" + explanation.map((q, i) => `<h3>第${i + 1}問</h3><p>${q}</p>`).join("\n")
+  
+  return {
+    textBody: textBody,
+    htmlBody: htmlBody
+  };
+}
+
+/**
+ * 問題のメール件名を作成する
+ * @returns {string} メール件名
+ */
+function createQuestionEmailSubject() {
+  const date = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd");
+  return `${date} 今日の算数問題`;
+}
+
+/**
+ * 回答のメール件名を作成する
+ * @returns {string} メール件名
+ */
+function createAnswerEmailSubject() {
+  const date = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy/MM/dd");
+  return `${date} 今日の算数問題の解説`;
 }
 
 /**
@@ -567,4 +684,18 @@ function isWeekend(date) {
   // 土日判定
   const day = date.getDay();
   return day === 0 || day === 6;
+}
+
+/**
+ * プロンプトテンプレート内のプレースホルダーを置換して、プロンプトを作成
+ * @param {string} grade - 対象学年 ("4" または "5")
+ * @returns {string} API に送信するプロンプト
+ */
+function createPrompt(grade) {
+  // 学年に基づいて適切なプロンプトを選択
+  const promptTemplate = grade === "5" ? PROMPT_MATH_PROBLEMS_5TH_GRADE : TEMP_PROMPT_MATH_PROBLEMS_4TH_GRADE;
+  
+  return promptTemplate.replace(/##\{WORD_PROBLEM\}##/g, () =>
+    selectRandomItem(CONFIG.WORD_PROBLEM_TOPICS[grade])
+  );
 }
