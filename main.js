@@ -45,7 +45,7 @@ const CONFIG = {
   API: {
     GEMINI: {
       ENDPOINT: "https://generativelanguage.googleapis.com/v1beta/models/",
-      MODEL_NAME: "gemini-2.0-flash",
+      MODEL_NAME: "gemini-2.5-pro-preview-03-25",
     },
     OPENAI: {
       ENDPOINT: "https://api.openai.com/v1/chat/completions",
