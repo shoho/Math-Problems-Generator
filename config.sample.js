@@ -9,6 +9,10 @@ const EMAIL_CONFIG = {
   }
 };
 
-function getEmailRecipients(env) {
-  return EMAIL_CONFIG[env].recipients;
+function getQuestionRecipients(env) {
+  return EMAIL_CONFIG[env].questionRecipients;
+}
+
+function getAnswerRecipients(env) {
+  return EMAIL_CONFIG[env].answerRecipients;
 }

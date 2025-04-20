@@ -1,7 +1,8 @@
 /**
  * 算数問題生成・メール配信スクリプト
  * 
- * Gemini, OpenAI, Claude APIを使用して小学生向け算数問題を生成し、
+ * Gemini, OpenAI, Claude APIを使用して小学生向け算数問題を生成
+ * Gemini API を利用して、その問題の回答と解説を生成
  * 指定したメールアドレスに配信するGoogle Apps Scriptです。
  */
 
@@ -21,8 +22,8 @@ function test() {
     console.log(questionsText);
     
     // 解説の生成
-    const explanation = getExplanationFromAPI(apiProvider, questions);
-    const explanationText = explanation.map((exp, i) => `第${i + 1}問\n ${exp}`).join("\n\n");
+    const explanation = getExplanationFromAPI(questions);
+    const explanationText = explanation;
     console.log("\n=== 解説 ===");
     console.log(explanationText);
   } catch (error) {
@@ -42,7 +43,7 @@ function test_with_email() {
  * 4年生向け本番実行用のエントリーポイント
  */
 function execute() {
-  main({ isProd: true, apiProvider: "claude", grade: "4" });
+  main({ isProd: true, apiProvider: "gemini", grade: "4" });
 }
 
 // ======== 設定 ========
@@ -68,25 +69,6 @@ const CONFIG = {
   // メール設定
   EMAIL: {
     SUBJECT_PREFIX: "今日のパパからの問題"
-  },
-  
-  // 生成設定
-  GENERATION: {
-    temperature: 1,
-    topK: 64,
-    topP: 0.95,
-    maxOutputTokens: 8192,
-    responseMimeType: "application/json",
-    responseSchema: {
-      type: "object",
-      properties: {
-        question_1: { type: "string" },
-        question_2: { type: "string" },
-        question_3: { type: "string" },
-        question_4: { type: "string" },
-        question_5: { type: "string" }
-      }
-    }
   },
   
   // 文章問題のテーマ一覧
@@ -117,32 +99,24 @@ const CONFIG = {
  * @param {string} options.grade - 対象学年 ("4" または "5")
  * @returns {void}
  */
-function main({ isProd = true, apiProvider = "claude", grade = "4" }) {
+function main({ isProd = true, apiProvider = "gemini", grade = "4" }) {
   const today = new Date();
   const env = isProd ? "PROD" : "DEV";
   
   // 休日チェック（本番環境のみ）
-  if (isProd && isWeekend(today)) {
-    Logger.log("Today is a weekend. The process will be skipped.");
-    return;
-  }
+  // if (isProd && isWeekend(today)) {
+  //   Logger.log("Today is a weekend. The process will be skipped.");
+  //   return;
+  // }
 
   try {
     // 問題の生成
     const questions = getQuestionsFromAPI(apiProvider, grade);
-    
-    // 問題の解説を生成
-    const explanation = getExplanationFromAPI(apiProvider, questions);
-    
+
     // 問題のメール内容を作成
     const questionEmailContent = createQuestionEmailContent(questions);
     const questionRecipients = getQuestionRecipients(env);
     const questionSubject = isProd ? createQuestionEmailSubject() : "[TEST]" + createQuestionEmailSubject();
-
-    // 回答のメール内容を作成
-    const answerEmailContent = createAnswerEmailContent(questions, explanation);
-    const answerRecipients = getAnswerRecipients(env);
-    const answerSubject = isProd ? createAnswerEmailSubject() : "[TEST]" + createAnswerEmailSubject();
 
     // 問題のメール送信
     sendEmailWithContent({
@@ -150,6 +124,16 @@ function main({ isProd = true, apiProvider = "claude", grade = "4" }) {
       subject: questionSubject,
       content: questionEmailContent
     });
+
+    // 問題の解説を生成（Geminiのみを使用）
+    const explanation = getExplanationFromAPI(questions);
+
+    // 回答のメール内容を作成
+    const answerEmailContent = createAnswerEmailContent(explanation);
+    const answerRecipients = getAnswerRecipients(env);
+    const answerSubject = isProd ? createAnswerEmailSubject() : "[TEST]" + createAnswerEmailSubject();
+
+    console.log(answerEmailContent)
 
     // 回答のメール送信
     sendEmailWithContent({
@@ -168,6 +152,49 @@ function main({ isProd = true, apiProvider = "claude", grade = "4" }) {
 }
 
 // ======== API呼び出し ========
+
+/**
+ * Gemini API を呼び出す
+ * @param {string} prompt - APIに送信するプロンプト
+ * @returns {string} API レスポンス
+ * @throws {Error} API 呼び出しに失敗した場合
+ */
+function callGeminiApi(prompt) {
+  const apiKey = getApiKey('GEMINI_API_KEY');
+  const url = `${CONFIG.API.GEMINI.ENDPOINT}${CONFIG.API.GEMINI.MODEL_NAME}:generateContent?key=${apiKey}`;
+  
+  const payload = {
+    contents: [{
+      role: "user",
+      parts: [{ text: prompt }]
+    }],
+    generationConfig: {
+      temperature: 1,
+      topK: 64,
+      topP: 0.95,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: "object",
+        properties: {
+          question_1: { type: "string" },
+          question_2: { type: "string" },
+          question_3: { type: "string" },
+          question_4: { type: "string" },
+          question_5: { type: "string" }
+        }
+      },
+    }
+  };
+
+  return callApi("Gemini", url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload)
+  });
+}
+
+
 
 /**
  * API を呼び出して質問を取得する
@@ -193,56 +220,6 @@ function getQuestionsFromAPI(apiProvider, grade) {
   // レスポンスの解析
   const jsonObject = parseJsonResponse(responseText);
   return extractQuestionsFromResponse(jsonObject, apiProvider);
-}
-
-/**
- * API を呼び出して問題の解説を取得する
- * @param {string} apiProvider - 使用するAPIのプロバイダ ("gemini", "openai", または "claude")
- * @param {string[]} questions - 問題の配列
- * @returns {string[]} 問題の解説の配列
- */
-function getExplanationFromAPI(apiProvider, questions) {
-  // プロンプトの生成
-  const prompt = getExplanationPrompt() + "\n" + questions.join("\n\n");
-  
-  // APIプロバイダに応じた関数を呼び出す
-  const apiCallers = {
-    'openai': callOpenAIApi,
-    'claude': callClaudeApi,
-    'gemini': callGeminiApi
-  };
-  
-  const apiCaller = apiCallers[apiProvider] || callGeminiApi;
-  const responseText = apiCaller(prompt);
-  
-  // レスポンスの解析
-  const jsonObject = parseJsonResponse(responseText);
-  return extractExplanationFromResponse(jsonObject, apiProvider);
-}
-
-/**
- * Gemini API を呼び出す
- * @param {string} prompt - APIに送信するプロンプト
- * @returns {string} API レスポンス
- * @throws {Error} API 呼び出しに失敗した場合
- */
-function callGeminiApi(prompt) {
-  const apiKey = getApiKey('GEMINI_API_KEY');
-  const url = `${CONFIG.API.GEMINI.ENDPOINT}${CONFIG.API.GEMINI.MODEL_NAME}:generateContent?key=${apiKey}`;
-  
-  const payload = {
-    contents: [{
-      role: "user",
-      parts: [{ text: prompt }]
-    }],
-    generationConfig: CONFIG.GENERATION
-  };
-
-  return callApi("Gemini", url, {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify(payload)
-  });
 }
 
 /**
@@ -317,7 +294,7 @@ function callClaudeApi(prompt) {
     temperature: 1,
     messages: [{
       role: "user",
-      content: createPrompt(grade) + `
+      content: prompt + `
 
 最終的な回答はJSON形式で以下の構造で返してください:
 {
@@ -488,77 +465,6 @@ function extractClaudeQuestions(jsonObject) {
   throw new Error("Could not extract JSON from Claude response");
 }
 
-/**
- * レスポンスから解説を抽出する
- * @param {Object} jsonObject - パースされたJSONオブジェクト
- * @param {string} apiProvider - 使用したAPIのプロバイダ
- * @returns {string[]} 解説の配列
- */
-function extractExplanationFromResponse(jsonObject, apiProvider) {
-  try {
-    // APIプロバイダに応じた抽出処理
-    const extractors = {
-      'gemini': extractGeminiExplanation,
-      'openai': extractOpenAIExplanation,
-      'claude': extractClaudeExplanation
-    };
-    
-    const extractor = extractors[apiProvider];
-    if (!extractor) {
-      throw new Error(`Unsupported API provider: ${apiProvider}`);
-    }
-    
-    return extractor(jsonObject);
-  } catch (error) {
-    throw new Error(`Explanation extraction failed: ${error.message}`);
-  }
-}
-
-/**
- * Gemini APIレスポンスから解説を抽出
- * @param {Object} jsonObject - パースされたJSONオブジェクト
- * @returns {string[]} 解説の配列
- */
-function extractGeminiExplanation(jsonObject) {
-  if (!jsonObject.candidates || !jsonObject.candidates[0].content || !jsonObject.candidates[0].content.parts) {
-    throw new Error("Invalid Gemini API response format");
-  }
-  
-  const explanationText = jsonObject.candidates[0].content.parts[0].text;
-  const explanationObj = JSON.parse(explanationText);
-  return Object.values(explanationObj);
-}
-
-/**
- * OpenAI APIレスポンスから解説を抽出
- * @param {Object} jsonObject - パースされたJSONオブジェクト
- * @returns {string[]} 解説の配列
- */
-function extractOpenAIExplanation(jsonObject) {
-  if (!jsonObject.choices || !jsonObject.choices[0].message || !jsonObject.choices[0].message.content) {
-    throw new Error("Invalid OpenAI API response format");
-  }
-  
-  const explanationText = jsonObject.choices[0].message.content;
-  const explanationObj = JSON.parse(explanationText);
-  return Object.values(explanationObj);
-}
-
-/**
- * Claude APIレスポンスから解説を抽出
- * @param {Object} jsonObject - パースされたJSONオブジェクト
- * @returns {string[]} 解説の配列
- */
-function extractClaudeExplanation(jsonObject) {
-  if (!jsonObject.content || jsonObject.content.length === 0) {
-    throw new Error("Invalid Claude API response format");
-  }
-  
-  const explanationText = jsonObject.content[0].text;
-  const explanationObj = JSON.parse(explanationText);
-  return Object.values(explanationObj);
-}
-
 // ======== メール処理 ========
 
 /**
@@ -579,12 +485,12 @@ function createQuestionEmailContent(questions) {
 /**
  * 回答のメール内容を作成する
  * @param {string[]} questions - 問題の配列
- * @param {string[]} explanation - 問題の解説の配列
+ * @param {string} explanation - 問題の解説テキスト
  * @returns {Object} メール内容
  */
-function createAnswerEmailContent(questions, explanation) {
-  const textBody = questions.map((q, i) => `第${i + 1}問\n${q}`).join("\n\n") + "\n\n" + explanation.map((q, i) => `第${i + 1}問\n${q}`).join("\n\n")
-  const htmlBody = questions.map((q, i) => `<h3>第${i + 1}問</h3><p>${q}</p>`).join("\n") + "<br/><hr /><br />" + explanation.map((q, i) => `<h3>第${i + 1}問</h3><p>${q}</p>`).join("\n")
+function createAnswerEmailContent(explanation) {
+  const textBody = explanation;
+  const htmlBody = explanation;
   
   return {
     textBody: textBody,
@@ -625,7 +531,6 @@ function sendEmailWithContent({ recipient, subject, content }) {
     MailApp.sendEmail({
       to: recipient,
       subject: subject,
-      body: content.textBody,
       htmlBody: content.htmlBody
     });
   } catch (error) {
