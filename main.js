@@ -103,11 +103,11 @@ function main({ isProd = true, apiProvider = "gemini", grade = "4" }) {
   const today = new Date();
   const env = isProd ? "PROD" : "DEV";
   
-  // 休日チェック（本番環境のみ）
-  // if (isProd && isWeekend(today)) {
-  //   Logger.log("Today is a weekend. The process will be skipped.");
-  //   return;
-  // }
+  休日チェック（本番環境のみ）
+  if (isProd && isWeekend(today)) {
+    Logger.log("Today is a weekend. The process will be skipped.");
+    return;
+  }
 
   try {
     // 問題の生成
