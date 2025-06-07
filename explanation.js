@@ -1,35 +1,18 @@
 /**
- * Module for getting math problem explanations using Gemini API
+ * 解説生成モジュール
+ * @deprecated このファイルの機能は GeminiApiClient クラスに移行されました
+ * 新しい機能は src/api/GeminiApiClient.js を使用してください
  */
 
 /**
- * Calls Gemini API (for text response)
- * @param {string} prompt - Prompt to send to API
- * @returns {string} API response
- * @throws {Error} When API call fails
+ * @deprecated 代わりに GeminiApiClient.generateTextContent() を使用してください
  */
 function callGeminiApiForText(prompt) {
-    try {
-        const apiKey = getApiKey('GEMINI_API_KEY');
-        if (!apiKey) {
-            throw new Error('GEMINI_API_KEY is not set');
-        }
-
-        const url = `${CONFIG.API.GEMINI.ENDPOINT}${CONFIG.API.GEMINI.MODEL_NAME}:generateContent?key=${apiKey}`;
-        
-        const payload = {
-            contents: [{
-                role: "user",
-                parts: [{ text: prompt }]
-            }],
-            generationConfig: CONFIG.GENERATION
-        };
+    Logger.log("Warning: callGeminiApiForText() is deprecated. Use GeminiApiClient.generateTextContent() instead.");
     
-        return callApi("Gemini", url, {
-            method: 'post',
-            contentType: 'text/plain',
-            payload: JSON.stringify(payload)
-        });
+    try {
+        const geminiClient = new GeminiApiClient();
+        return geminiClient.generateTextContent(prompt);
     } catch (error) {
         console.error('Error occurred while calling Gemini API:', error);
         throw error;
@@ -37,18 +20,14 @@ function callGeminiApiForText(prompt) {
 }
 
 /**
- * Extracts explanation from API response
- * @param {Object} jsonObject - JSON object from API response
- * @returns {Array} Array of explanations
- * @throws {Error} When response format is invalid
+ * @deprecated 代わりに GeminiApiClient.extractExplanation() を使用してください
  */
 function extractExplanationFromResponse(jsonObject) {
+    Logger.log("Warning: extractExplanationFromResponse() is deprecated. Use GeminiApiClient.extractExplanation() instead.");
+    
     try {
-        if (!jsonObject.candidates || !jsonObject.candidates[0].content || !jsonObject.candidates[0].content.parts) {
-            throw new Error("Invalid Gemini API response format");
-        }
-        
-        return jsonObject.candidates[0].content.parts[0].text;
+        const geminiClient = new GeminiApiClient();
+        return geminiClient.extractExplanation(jsonObject);
     } catch (error) {
         console.error('Error occurred while extracting explanation:', error);
         throw error;
@@ -56,28 +35,15 @@ function extractExplanationFromResponse(jsonObject) {
 }
 
 /**
- * Gets problem explanations by calling API
- * @param {string[]} questions - Array of questions
- * @returns {string} Explanation text
- * @throws {Error} When explanation retrieval fails
+ * @deprecated 代わりに QuestionGenerationService.generateExplanation() を使用してください
  */
 function getExplanationFromAPI(questions) {
+    Logger.log("Warning: getExplanationFromAPI() is deprecated. Use QuestionGenerationService.generateExplanation() instead.");
+    
     try {
-        // Generate prompt
-        const prompt = getExplanationPrompt() + "\n" + questions.join("\n\n");
-
-        // Call Gemini API (get response in text format)
-        const responseText = callGeminiApiForText(prompt);
-
-        // Parse response
-        const jsonObject = parseJsonResponse(responseText);
-        return extractExplanationFromResponse(jsonObject);
+        return QuestionGenerationService.generateExplanation(questions);
     } catch (error) {
         console.error('Error occurred while getting explanation:', error);
         throw error;
     }
-}
-
-function getExplanationPrompt() {
-  return EXPLANATION_PROMPT;
 }
