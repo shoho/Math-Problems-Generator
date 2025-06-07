@@ -197,50 +197,50 @@ function logEmailContent({ textBody, htmlBody }) {
   Logger.log("=== Email Content ===");
   Logger.log("Text Body:");
   Logger.log(textBody);
-  Logger.log("HTML Body:");
-  Logger.log(htmlBody);
-  Logger.log("=====================");
-}
+        Logger.log("HTML Body:");
+      Logger.log(htmlBody);
+      Logger.log("=====================");
+    }
 
-/**
- * 現在の日時を日本語形式で取得する
- * @returns {string} フォーマットされた日時文字列
- */
-function getFormattedDateTime() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const hours = String(now.getHours()).padStart(2, '0');
-  const minutes = String(now.getMinutes()).padStart(2, '0');
-  
-  return `${year}/${month}/${day} ${hours}:${minutes}`;
-}
+    /**
+     * 現在の日時を日本語形式で取得する
+     * @returns {string} フォーマットされた日時文字列
+     */
+    function getFormattedDateTime() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      
+      return `${year}/${month}/${day} ${hours}:${minutes}`;
+    }
 
-/**
- * 入力値のバリデーション
- * @param {*} value - チェックする値
- * @param {string} type - 期待する型
- * @param {string} name - パラメータ名（エラーメッセージ用）
- * @throws {Error} バリデーションに失敗した場合
- */
-function validateInput(value, type, name) {
-  if (type === 'string' && (typeof value !== 'string' || value.trim() === '')) {
-    throw new Error(`${name} must be a non-empty string`);
-  }
-  if (type === 'number' && (typeof value !== 'number' || isNaN(value))) {
-    throw new Error(`${name} must be a valid number`);
-  }
-  if (type === 'array' && !Array.isArray(value)) {
-    throw new Error(`${name} must be an array`);
-  }
-  if (type === 'object' && (typeof value !== 'object' || value === null)) {
-    throw new Error(`${name} must be an object`);
-  }
-} /**
- * APIクライアントの基底クラス
- */
-class BaseApiClient {
+    /**
+     * 入力値のバリデーション
+     * @param {*} value - チェックする値
+     * @param {string} type - 期待する型
+     * @param {string} name - パラメータ名（エラーメッセージ用）
+     * @throws {Error} バリデーションに失敗した場合
+     */
+    function validateInput(value, type, name) {
+      if (type === 'string' && (typeof value !== 'string' || value.trim() === '')) {
+        throw new Error(`${name} must be a non-empty string`);
+      }
+      if (type === 'number' && (typeof value !== 'number' || isNaN(value))) {
+        throw new Error(`${name} must be a valid number`);
+      }
+      if (type === 'array' && !Array.isArray(value)) {
+        throw new Error(`${name} must be an array`);
+      }
+      if (type === 'object' && (typeof value !== 'object' || value === null)) {
+        throw new Error(`${name} must be an object`);
+      }
+    } /**
+     * APIクライアントの基底クラス
+     */
+    class BaseApiClient {
   /**
    * @param {string} apiName - API名
    * @param {string} endpoint - APIエンドポイント
@@ -268,13 +268,13 @@ class BaseApiClient {
    */
   callApi(url, options) {
     try {
-      console.log(`Calling ${this.apiName} API...`);
+      Logger.log(`Calling ${this.apiName} API...`);
       const response = UrlFetchApp.fetch(url, options);
 
       const statusCode = response.getResponseCode();
       if (statusCode >= 400) {
         const errorBody = response.getContentText();
-        console.error(`${this.apiName} API Error Response:`, errorBody);
+        Logger.log(`${this.apiName} API Error Response: ${errorBody}`);
         throw new Error(`${this.apiName} API returned status code ${statusCode}: ${errorBody}`);
       }
 
@@ -448,38 +448,38 @@ class GeminiApiClient extends BaseApiClient {
       validateInput(explanationPrompt, 'string', 'explanation prompt');
 
       // デバッグ: 問題数と内容を確認
-      console.log("=== 解説生成デバッグ情報 ===");
-      console.log("問題数:", questions.length);
-      console.log("各問題の内容:");
+      Logger.log("=== 解説生成デバッグ情報 ===");
+      Logger.log("問題数: " + questions.length);
+      Logger.log("各問題の内容:");
       questions.forEach((q, i) => {
-        console.log(`問題${i + 1}: ${q}`);
+        Logger.log(`問題${i + 1}: ${q}`);
       });
 
       const prompt = explanationPrompt + "\n" + questions.join("\n\n");
       
       // デバッグ: 生成されたプロンプトを確認
-      console.log("\n生成されたプロンプト:");
-      console.log(prompt);
-      console.log("=== デバッグ情報終了 ===\n");
+      Logger.log("\n生成されたプロンプト:");
+      Logger.log(prompt);
+      Logger.log("=== デバッグ情報終了 ===\n");
 
       const responseText = this.generateTextContent(prompt);
       
       // デバッグ: レスポンスのサイズを確認
-      console.log("\n=== APIレスポンス情報 ===");
-      console.log("レスポンスの長さ:", responseText.length, "文字");
-      console.log("=== レスポンス情報終了 ===\n");
+      Logger.log("\n=== APIレスポンス情報 ===");
+      Logger.log("レスポンスの長さ: " + responseText.length + " 文字");
+      Logger.log("=== レスポンス情報終了 ===\n");
       
       const jsonObject = parseJsonResponse(responseText);
       const explanationText = this.extractExplanation(jsonObject);
       
       // デバッグ: 解説テキストのサイズを確認
-      console.log("\n=== 解説テキスト情報 ===");
-      console.log("解説テキストの長さ:", explanationText.length, "文字");
-      console.log("解説テキストの最初の500文字:");
-      console.log(explanationText.substring(0, 500));
-      console.log("\n解説テキストの最後の500文字:");
-      console.log(explanationText.substring(explanationText.length - 500));
-      console.log("=== 解説テキスト情報終了 ===\n");
+      Logger.log("\n=== 解説テキスト情報 ===");
+      Logger.log("解説テキストの長さ: " + explanationText.length + " 文字");
+      Logger.log("解説テキストの最初の500文字:");
+      Logger.log(explanationText.substring(0, 500));
+      Logger.log("\n解説テキストの最後の500文字:");
+      Logger.log(explanationText.substring(explanationText.length - 500));
+      Logger.log("=== 解説テキスト情報終了 ===\n");
       
       return explanationText;
     } catch (error) {
@@ -755,10 +755,10 @@ class QuestionGenerationService {
       const explanationPrompt = ConfigService.getExplanationPrompt();
       
       // デバッグ: 解説プロンプトの内容を確認
-      console.log("=== QuestionGenerationService デバッグ ===");
-      console.log("解説プロンプト:", explanationPrompt);
-      console.log("問題数:", questions.length);
-      console.log("=== デバッグ終了 ===\n");
+      Logger.log("=== QuestionGenerationService デバッグ ===");
+      Logger.log("解説プロンプト:", explanationPrompt);
+      Logger.log("問題数:", questions.length);
+      Logger.log("=== デバッグ終了 ===\n");
       
       return geminiClient.generateExplanation(questions, explanationPrompt);
     } catch (error) {
@@ -851,10 +851,10 @@ class EmailService {
       Logger.log(`Subject: ${subject}`);
       
       // デバッグ: メール内容のサイズを確認
-      console.log("\n=== メール内容情報 ===");
-      console.log("テキスト本文の長さ:", content.textBody.length, "文字");
-      console.log("HTML本文の長さ:", content.htmlBody.length, "文字");
-      console.log("=== メール内容情報終了 ===\n");
+      Logger.log("\n=== メール内容情報 ===");
+      Logger.log("テキスト本文の長さ: " + content.textBody.length + " 文字");
+      Logger.log("HTML本文の長さ: " + content.htmlBody.length + " 文字");
+      Logger.log("=== メール内容情報終了 ===\n");
 
       MailApp.sendEmail({
         to: recipient,
@@ -916,7 +916,7 @@ class EmailService {
         content: content
       });
 
-      console.log(content.textBody);
+      Logger.log(content.textBody);
 
       if (isTest) {
         logEmailContent(content);
@@ -1185,14 +1185,14 @@ class MathProblemService {
       const questions = QuestionGenerationService.generateQuestions(apiProvider, grade);
       const questionsText = questions.map((q, i) => `第${i + 1}問\n ${q}`).join("\n\n");
       
-      console.log("=== 問題 ===");
-      console.log(questionsText);
+      Logger.log("=== 問題 ===");
+      Logger.log(questionsText);
 
       // 解説の生成
       const explanation = QuestionGenerationService.generateExplanation(questions);
       
-      console.log("\n=== 解説 ===");
-      console.log(explanation);
+      Logger.log("\n=== 解説 ===");
+      Logger.log(explanation);
 
       Logger.log("Test execution completed successfully!");
 
@@ -1206,20 +1206,20 @@ class MathProblemService {
    * 設定情報を表示
    */
   static displayConfiguration() {
-    console.log("=== 利用可能な設定 ===");
-    console.log("APIプロバイダー:", ApiClientFactory.getAvailableProviders());
-    console.log("学年:", PromptService.getAvailableGrades());
-    console.log("環境:", ConfigService.getAvailableEnvironments());
+    Logger.log("=== 利用可能な設定 ===");
+    Logger.log("APIプロバイダー: " + ApiClientFactory.getAvailableProviders().join(", "));
+    Logger.log("学年: " + PromptService.getAvailableGrades().join(", "));
+    Logger.log("環境: " + ConfigService.getAvailableEnvironments().join(", "));
     
-    console.log("\n=== 文章問題テーマ ===");
+    Logger.log("\n=== 文章問題テーマ ===");
     PromptService.getAvailableGrades().forEach(grade => {
-      console.log(`${grade}年生:`, PromptService.getWordProblemTopics(grade));
+      Logger.log(`${grade}年生: ${PromptService.getWordProblemTopics(grade).join(", ")}`);
     });
   }
 } /**
- * 算数問題生成・メール配信スクリプト - リファクタリング版
+ * 算数問題生成・メール配信スクリプト
  * 
- * Gemini, OpenAI, Claude APIを使用して小学生向け算数問題を生成
+ * Gemini APIを使用して小学生向け算数問題を生成し、
  * 指定したメールアドレスに配信するGoogle Apps Scriptです。
  */
 
@@ -1236,9 +1236,9 @@ function test() {
     };
     // プロンプト生成とログ出力
     const prompt = PromptService.createPrompt(options.grade);
-    console.log("=== 問題生成プロンプト (test) ===");
-    console.log(prompt);
-    console.log("===============================");
+    Logger.log("=== 問題生成プロンプト (test) ===");
+    Logger.log(prompt);
+    Logger.log("===============================");
 
     MathProblemService.testConsoleOutput(options);
   } catch (error) {
@@ -1259,9 +1259,9 @@ function test_with_email() {
     };
     // プロンプト生成とログ出力
     const prompt = PromptService.createPrompt(options.grade);
-    console.log("=== 問題生成プロンプト (test_with_email) ===");
-    console.log(prompt);
-    console.log("======================================");
+    Logger.log("=== 問題生成プロンプト (test_with_email) ===");
+    Logger.log(prompt);
+    Logger.log("======================================");
 
     MathProblemService.execute(options);
   } catch (error) {
@@ -1381,53 +1381,20 @@ function test_explanation_simple() {
   try {
     const response = UrlFetchApp.fetch(url, options);
     const responseText = response.getContentText();
-    console.log("レスポンスの長さ:", responseText.length);
+    Logger.log("レスポンスの長さ: " + responseText.length);
     
     const jsonObject = JSON.parse(responseText);
     const explanation = jsonObject.candidates[0].content.parts[0].text;
-    console.log("解説の長さ:", explanation.length);
-    console.log("\n最初の1000文字:");
-    console.log(explanation.substring(0, 1000));
-    console.log("\n最後の1000文字:");
-    console.log(explanation.substring(explanation.length - 1000));
+    Logger.log("解説の長さ: " + explanation.length);
+    Logger.log("\n最初の1000文字:");
+    Logger.log(explanation.substring(0, 1000));
+    Logger.log("\n最後の1000文字:");
+    Logger.log(explanation.substring(explanation.length - 1000));
     
     return explanation;
   } catch (error) {
-    console.error("エラー:", error);
+    Logger.log("エラー: " + error);
     throw error;
   }
 }
 
-// ======== 下位互換性のための関数（旧バージョンとの互換性維持） ========
-
-/**
- * @deprecated 代わりに MathProblemService.execute() を使用してください
- */
-function main(options) {
-  Logger.log("Warning: main() function is deprecated. Use MathProblemService.execute() instead.");
-  return MathProblemService.execute(options);
-}
-
-/**
- * @deprecated 代わりに QuestionGenerationService.generateQuestions() を使用してください
- */
-function getQuestionsFromAPI(apiProvider, grade) {
-  Logger.log("Warning: getQuestionsFromAPI() function is deprecated. Use QuestionGenerationService.generateQuestions() instead.");
-  return QuestionGenerationService.generateQuestions(apiProvider, grade);
-}
-
-/**
- * @deprecated 代わりに QuestionGenerationService.generateExplanation() を使用してください
- */
-function getExplanationFromAPI(questions) {
-  Logger.log("Warning: getExplanationFromAPI() function is deprecated. Use QuestionGenerationService.generateExplanation() instead.");
-  return QuestionGenerationService.generateExplanation(questions);
-}
-
-/**
- * @deprecated 代わりに PromptService.createPrompt() を使用してください
- */
-function createPrompt(grade) {
-  Logger.log("Warning: createPrompt() function is deprecated. Use PromptService.createPrompt() instead.");
-  return PromptService.createPrompt(grade);
-} 
